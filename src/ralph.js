@@ -198,9 +198,10 @@ program
   .description('Run Claude CLI in a loop until a task is complete')
   .version('1.0.0')
   .option('-i, --iterations <number>', 'maximum number of iterations', '50')
+  .option('-o, --once', 'run only a single iteration')
   .requiredOption('-p, --prompt <file>', 'path to the prompt file')
   .action((options) => {
-    const maxIterations = parseInt(/** @type {string} */ (options.iterations), 10);
+    const maxIterations = options.once ? 1 : parseInt(/** @type {string} */ (options.iterations), 10);
     const promptFile = /** @type {string} */ (options.prompt);
 
     if (isNaN(maxIterations) || maxIterations < 1) {
