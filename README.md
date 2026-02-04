@@ -1,6 +1,6 @@
 # steg-scripts
 
-Run Claude CLI in a loop until a task is complete.
+Helpful Node.js scripts for various tasks
 
 ## Local Development
 
