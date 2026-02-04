@@ -1,49 +1,14 @@
 #!/usr/bin/env node
 // @ts-check
 
+/**
+ * @import { IterationResult, StreamMessage } from './types.js'
+ */
+
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { program } = require('commander');
-
-/**
- * @typedef {Object} IterationResult
- * @property {boolean} success - Whether the iteration completed without errors
- * @property {boolean} complete - Whether the task is finished
- */
-
-/**
- * @typedef {Object} TextBlock
- * @property {'text'} type
- * @property {string} text
- */
-
-/**
- * @typedef {Object} ToolUseBlock
- * @property {'tool_use'} type
- * @property {string} name
- * @property {unknown} input
- */
-
-/**
- * @typedef {Object} ToolResultBlock
- * @property {'tool_result'} type
- * @property {string | unknown} content
- */
-
-/**
- * @typedef {TextBlock | ToolUseBlock | ToolResultBlock} ContentBlock
- */
-
-/**
- * @typedef {Object} StreamMessage
- * @property {string} [type]
- * @property {string} [subtype]
- * @property {string} [session_id]
- * @property {{ content?: ContentBlock[] }} [message]
- * @property {number} [num_turns]
- * @property {number} [total_cost_usd]
- */
 
 const ERROR_PATTERNS = [/Error: No messages returned/, /promise rejected with the reason/];
 
