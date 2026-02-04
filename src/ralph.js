@@ -1,25 +1,66 @@
 #!/usr/bin/env node
+// @ts-check
 
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { program } = require('commander');
 
-const MAX_ITERATIONS = parseInt(process.argv[2], 10) || 50;
-const SCRIPT_DIR = __dirname;
-const PROMPT_FILE = path.join(SCRIPT_DIR, 'fix-new-duplicates-prompt.md');
+/**
+ * @typedef {Object} IterationResult
+ * @property {boolean} success - Whether the iteration completed without errors
+ * @property {boolean} complete - Whether the task is finished
+ */
+
+/**
+ * @typedef {Object} TextBlock
+ * @property {'text'} type
+ * @property {string} text
+ */
+
+/**
+ * @typedef {Object} ToolUseBlock
+ * @property {'tool_use'} type
+ * @property {string} name
+ * @property {unknown} input
+ */
+
+/**
+ * @typedef {Object} ToolResultBlock
+ * @property {'tool_result'} type
+ * @property {string | unknown} content
+ */
+
+/**
+ * @typedef {TextBlock | ToolUseBlock | ToolResultBlock} ContentBlock
+ */
+
+/**
+ * @typedef {Object} StreamMessage
+ * @property {string} [type]
+ * @property {string} [subtype]
+ * @property {string} [session_id]
+ * @property {{ content?: ContentBlock[] }} [message]
+ * @property {number} [num_turns]
+ * @property {number} [total_cost_usd]
+ */
 
 const ERROR_PATTERNS = [/Error: No messages returned/, /promise rejected with the reason/];
 
-console.log('🚀 Starting Ralph');
-
+/**
+ * Parse newline-delimited JSON from a stream buffer
+ * @param {string} buffer - The current buffer content
+ * @param {(json: StreamMessage) => void} callback - Called for each parsed JSON object
+ * @returns {string} The remaining unparsed buffer content
+ */
 function parseStreamJson(buffer, callback) {
   const lines = buffer.split('\n');
-  const remaining = lines.pop() || '';
+  const remaining = lines.pop() ?? '';
 
   for (const line of lines) {
     if (!line.trim()) continue;
     try {
-      const json = JSON.parse(line);
+      const json = /** @type {StreamMessage} */ (JSON.parse(line));
       callback(json);
     } catch {
       // Incomplete JSON, ignore
@@ -29,8 +70,13 @@ function parseStreamJson(buffer, callback) {
   return remaining;
 }
 
+/**
+ * Format a stream message for display
+ * @param {StreamMessage} json - The parsed stream message
+ * @returns {string} Formatted output string
+ */
 function formatStreamMessage(json) {
-  if (json.type === 'system' && json.subtype === 'init') {
+  if (json.type === 'system' && json.subtype === 'init' && json.session_id) {
     return `[Session: ${json.session_id}]\n`;
   }
 
@@ -40,7 +86,7 @@ function formatStreamMessage(json) {
       if (block.type === 'text') {
         output += block.text;
       } else if (block.type === 'tool_use') {
-        output += `\n🔧 [${block.name}] ${JSON.stringify(block.input).slice(0, 150)}...\n`;
+        output += `\n[${block.name}] ${JSON.stringify(block.input).slice(0, 150)}...\n`;
       }
     }
     return output;
@@ -51,53 +97,64 @@ function formatStreamMessage(json) {
       if (block.type === 'tool_result') {
         const content = typeof block.content === 'string' ? block.content : JSON.stringify(block.content);
         const truncated = content.length > 300 ? content.slice(0, 300) + '...' : content;
-        return `📋 [Result] ${truncated}\n`;
+        return `[Result] ${truncated}\n`;
       }
     }
   }
 
   if (json.type === 'result') {
-    return `\n✅ [${json.subtype}] Turns: ${json.num_turns}, Cost: $${json.total_cost_usd?.toFixed(4) || '0'}\n`;
+    const cost = json.total_cost_usd?.toFixed(4) ?? '0';
+    return `\n[${json.subtype ?? 'done'}] Turns: ${json.num_turns ?? 0}, Cost: $${cost}\n`;
   }
 
   return '';
 }
 
-async function runIteration(iteration) {
-  console.log(`\n═══ Iteration ${iteration} ═══\n`);
+/**
+ * Run a single iteration of the Claude CLI
+ * @param {number} iteration - The iteration number
+ * @param {string} promptFile - Path to the prompt file
+ * @returns {Promise<IterationResult>} The result of the iteration
+ */
+async function runIteration(iteration, promptFile) {
+  console.log(`\n=== Iteration ${iteration} ===\n`);
 
   return new Promise((resolve) => {
     let rawOutput = '';
     let errorDetected = false;
     let buffer = '';
-    let lastAssistantText = ''; // Track only the final assistant message text
+    let lastAssistantText = '';
 
-    const promptContent = fs.readFileSync(PROMPT_FILE, 'utf-8');
+    const promptContent = fs.readFileSync(promptFile, 'utf-8');
 
     const claude = spawn(
       'claude',
       ['--print', '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions'],
       {
         stdio: ['pipe', 'pipe', 'pipe'],
-        detached: true
+        detached: true,
       }
     );
 
     claude.stdin.write(promptContent);
     claude.stdin.end();
 
+    /**
+     * @param {Buffer} data
+     */
     const handleData = (data) => {
       const text = data.toString();
       rawOutput += text;
 
-      // Check for error patterns
       for (const pattern of ERROR_PATTERNS) {
         if (pattern.test(rawOutput)) {
           errorDetected = true;
           console.log('');
-          console.log('⚠️ Claude error detected, killing process tree...');
+          console.log('Claude error detected, killing process tree...');
           try {
-            process.kill(-claude.pid, 'SIGTERM');
+            if (claude.pid !== undefined) {
+              process.kill(-claude.pid, 'SIGTERM');
+            }
           } catch {
             // Process may already be dead
           }
@@ -105,14 +162,12 @@ async function runIteration(iteration) {
         }
       }
 
-      // Parse and display streaming output
       buffer = parseStreamJson(buffer + text, (json) => {
         const formatted = formatStreamMessage(json);
         if (formatted) {
           process.stdout.write(formatted);
         }
 
-        // Track the last assistant message text content
         if (json.type === 'assistant' && json.message?.content) {
           lastAssistantText = '';
           for (const block of json.message.content) {
@@ -125,7 +180,7 @@ async function runIteration(iteration) {
     };
 
     claude.stdout.on('data', handleData);
-    claude.stderr.on('data', (data) => {
+    claude.stderr.on('data', (/** @type {Buffer} */ data) => {
       process.stderr.write(data.toString());
     });
 
@@ -135,8 +190,6 @@ async function runIteration(iteration) {
         return;
       }
 
-      // Only check the FINAL assistant message for the completion marker
-      // This prevents false positives from intermediate messages mentioning the marker
       if (lastAssistantText.trim() === '<promise>COMPLETE</promise>') {
         resolve({ success: true, complete: true });
       } else {
@@ -151,21 +204,55 @@ async function runIteration(iteration) {
   });
 }
 
-async function main() {
-  for (let i = 1; i <= MAX_ITERATIONS; i++) {
-    const result = await runIteration(i);
+/**
+ * Main entry point
+ * @param {number} maxIterations - Maximum number of iterations
+ * @param {string} promptFile - Path to the prompt file
+ */
+async function main(maxIterations, promptFile) {
+  console.log('Starting Ralph');
+  console.log(`  Max iterations: ${maxIterations}`);
+  console.log(`  Prompt file: ${promptFile}`);
+
+  for (let i = 1; i <= maxIterations; i++) {
+    const result = await runIteration(i, promptFile);
 
     if (result.complete) {
-      console.log('✅ Done!');
+      console.log('Done!');
       process.exit(0);
     }
 
-    // Wait 2 seconds before next iteration
     await new Promise((r) => setTimeout(r, 2000));
   }
 
-  console.log('⚠️ Max iterations reached');
+  console.log('Max iterations reached');
   process.exit(1);
 }
 
-main();
+const SCRIPT_DIR = __dirname;
+const DEFAULT_PROMPT_FILE = path.join(SCRIPT_DIR, 'fix-new-duplicates-prompt.md');
+
+program
+  .name('ralph')
+  .description('Run Claude CLI in a loop until a task is complete')
+  .version('1.0.0')
+  .option('-i, --iterations <number>', 'maximum number of iterations', '50')
+  .option('-p, --prompt <file>', 'path to the prompt file', DEFAULT_PROMPT_FILE)
+  .action((options) => {
+    const maxIterations = parseInt(/** @type {string} */ (options.iterations), 10);
+    const promptFile = /** @type {string} */ (options.prompt);
+
+    if (isNaN(maxIterations) || maxIterations < 1) {
+      console.error('Error: iterations must be a positive number');
+      process.exit(1);
+    }
+
+    if (!fs.existsSync(promptFile)) {
+      console.error(`Error: prompt file not found: ${promptFile}`);
+      process.exit(1);
+    }
+
+    main(maxIterations, promptFile);
+  });
+
+program.parse();
