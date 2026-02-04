@@ -1,20 +1,32 @@
 {
   "name": "node-scripts",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "author": "Andrew Stegmaier",
+  "description": "Helpful Node.js scripts for various tasks",
+  "license": "ISC",
+  "type": "commonjs",
+  "bin": {
+    "ralph": "./src/ralph.js"
+  },
+  "files": [
+    "src"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "TODO"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "typecheck": "tsc"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@10.28.1",
   "dependencies": {
     "commander": "^14.0.3"
   },
   "devDependencies": {
     "@types/node": "^25.2.0",
     "typescript": "^5.9.3"
-  }
+  },
+  "packageManager": "pnpm@10.28.1"
 }

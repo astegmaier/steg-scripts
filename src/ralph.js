@@ -7,7 +7,6 @@
 
 const { spawn } = require('child_process');
 const fs = require('fs');
-const path = require('path');
 const { program } = require('commander');
 
 const ERROR_PATTERNS = [/Error: No messages returned/, /promise rejected with the reason/];
@@ -194,15 +193,12 @@ async function main(maxIterations, promptFile) {
   process.exit(1);
 }
 
-const SCRIPT_DIR = __dirname;
-const DEFAULT_PROMPT_FILE = path.join(SCRIPT_DIR, 'fix-new-duplicates-prompt.md');
-
 program
   .name('ralph')
   .description('Run Claude CLI in a loop until a task is complete')
   .version('1.0.0')
   .option('-i, --iterations <number>', 'maximum number of iterations', '50')
-  .option('-p, --prompt <file>', 'path to the prompt file', DEFAULT_PROMPT_FILE)
+  .requiredOption('-p, --prompt <file>', 'path to the prompt file')
   .action((options) => {
     const maxIterations = parseInt(/** @type {string} */ (options.iterations), 10);
     const promptFile = /** @type {string} */ (options.prompt);
