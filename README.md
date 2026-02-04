@@ -1,4 +1,4 @@
-# node-scripts
+# steg-scripts
 
 Run Claude CLI in a loop until a task is complete.
 
@@ -20,10 +20,4 @@ To unlink:
 
 ```bash
 npm run unlink
-```
-
-## Installation (from npm)
-
-```bash
-npm install -g node-scripts
 ```

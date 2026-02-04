@@ -1,5 +1,5 @@
 {
-  "name": "node-scripts",
+  "name": "steg-scripts",
   "version": "1.0.0",
   "author": "Andrew Stegmaier",
   "description": "Helpful Node.js scripts for various tasks",
