@@ -4,10 +4,10 @@ Helpful Node.js scripts for various tasks
 
 ## Local Development
 
-Link the package globally to use the `ralph` command:
+Link the package globally to use the `ralph` command from any directory:
 
 ```bash
-npm run link
+npm link
 ```
 
 Verify it works:
@@ -19,5 +19,5 @@ ralph --help
 To unlink:
 
 ```bash
-npm run unlink
+npm unlink -g steg-scripts
 ```
