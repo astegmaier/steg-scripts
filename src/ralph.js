@@ -154,7 +154,7 @@ async function runIteration(iteration, promptFile) {
         return;
       }
 
-      if (lastAssistantText.trim() === '<promise>COMPLETE</promise>') {
+      if (lastAssistantText.trim().endsWith('<promise>COMPLETE</promise>')) {
         resolve({ success: true, complete: true });
       } else {
         resolve({ success: true, complete: false });
